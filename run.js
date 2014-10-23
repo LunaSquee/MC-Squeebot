@@ -4,9 +4,9 @@ var exec = require('child_process'),
     readline = require('readline'),
     util = require('util'),
     colors = require('colors'),
-    serverdir = __dirname+"/server",            // Minecraft server directory
+    settings = require('./settings.json'),      // Settings file
+    serverdir = __dirname+"/"+settings.cwd,  // Minecraft server directory
     server_process = null,                      // Server process
-    settings = require('./settings.json');      // Settings file
     commandslist = ["!commands - All commands", "!np - Currently playing song"];
     
     function getCurrentSongData(callback) {

@@ -1,6 +1,7 @@
 {
-    "ramStart":1024,
+    "ramStart":524,
     "ramMax":1024,
     "jarname":"minecraft_server.jar",
-    "botname":"Squeebot"
+    "botname":"Squeebot",
+    "cwd":"server"
 }
