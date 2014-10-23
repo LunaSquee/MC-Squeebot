@@ -6,11 +6,7 @@ var exec = require('child_process'),
     colors = require('colors'),
     serverdir = __dirname+"/server",            // Minecraft server directory
     server_process = null,                      // Server process
-    randomkey = true,                           // Generate a random key on each run
-    ramStart = 1024,                            // Ram start (-Xms[THIS]M)
-    ramMax = 1024,                              // Ram maximum (-Xmx[THIS]M)
-    jarname = "minecraft_server.jar",           // Name of the server jar
-    botname = "Squeebot";                       // Name of the bot
+    settings = require('./settings.json');      // Settings file
     commandslist = ["!commands - All commands", "!np - Currently playing song"];
     
     function getCurrentSongData(callback) {
@@ -39,10 +35,10 @@ var exec = require('child_process'),
         var def = {text:msg, color:color}
         switch(type) {
             case 1:
-                def.text = "<%s> %s".format(botname, msg);
+                def.text = "<%s> %s".format(settings.botname, msg);
                 break;
             case 2:
-                def.text = "* %s %s".format(botname, msg);
+                def.text = "* %s %s".format(settings.botname, msg);
                 break;
             case 3:
                 def.text = msg;
@@ -55,10 +51,10 @@ var exec = require('child_process'),
     
     function handleMessage(username, message, simplified) {
         if(simplified[0]==="!np") {
-            getCurrentSongData(function(d, e, i) { if(i) { sendMessage("@a", "Now playing: "+d+" | Listeners: "+e, "white", 1);} else { sendMessage("@a", d, "white", 1)}});
+            getCurrentSongData(function(d, e, i) { if(i) { sendMessage("@a", d+" - "+e+" listener"+(e!==1?"s":""), "white", 1);} else { sendMessage("@a", d, "white", 1)}});
         } 
         else if(simplified[0]==="!commands") {
-            sendMessage("@a", "--- Currently available commands for "+botname+" ---", "dark_green", 3);
+            sendMessage("@a", "--- Currently available commands for "+settings.botname+" ---", "dark_green", 3);
             commandslist.forEach(function(d) {
                 sendMessage("@a", d, "white", 3);
             });
@@ -83,7 +79,7 @@ var exec = require('child_process'),
     
     server_process = exec.spawn(
         "java",
-        ["-Xms"+ramStart+"M", "-Xmx"+ramMax+"M", "-jar", jarname, "nogui"],
+        ["-Xms"+settings.ramStart+"M", "-Xmx"+settings.ramMax+"M", "-jar", settings.jarname, "nogui"],
         { cwd:serverdir }
     );
     
