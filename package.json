@@ -1,0 +1,12 @@
+{
+  "name": "NodeMCServer",
+  "version": "0.0.1",
+  "description": "Node.js Minecraft chat bot",
+  "main": "run.js",
+  "dependencies": {
+    "colors": "~1.0.3",
+    "request": "~2.46.0"
+  },
+  "devDependencies": {},
+  "author": "Evert Prants"
+}
