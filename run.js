@@ -1,27 +1,71 @@
 #!/usr/bin/env node
 var exec = require('child_process'),
-    request = require('request'),
+    //request = require('request'),
+    http = require('http'),
     readline = require('readline'),
+    fs = require('fs'),
     util = require('util'),
     colors = require('colors'),
     settings = require('./settings.json'),      // Settings file
     serverdir = __dirname+"/"+settings.cwd,  // Minecraft server directory
     server_process = null,                      // Server process
-    commandslist = ["!commands - All commands", "!np - Currently playing song"];
+    commandslist = ["!commands - All commands", "!np - Currently playing song", "!warps <dimension> - List of warps for that dimension"];
     
+    // ADDONS
+var warps = require('./warps.json');
+
+    function listWarps(requester, dim) {
+        var extlist = [];
+        
+        if(!(dim in warps))
+            return [''];
+        
+        for(var loc in warps[dim]) {
+            var obj = warps[dim][loc];
+            extlist.push("{\"text\":\"["+loc+"] \", \"clickEvent\":{\"action\":\"run_command\", \"value\":\"/tp "+requester+" "+obj[0]+"\"}, \"color\":\""+obj[1]+"\"}");
+        }
+        return extlist;
+    }
+    
+    function warpWorker(startmessage, username, dimension) {
+        var lowercase = dimension.toLowerCase();
+        var dimensionVerify = (lowercase === "overworld" || lowercase === "nether" || lowercase === "end" ? lowercase : "overworld");
+        var list = listWarps(username, dimensionVerify).join(", ");
+        var mesd = "tellraw "+username+" {\"text\":\"%s\", \"extra\": [%s]}";
+        var sauce = util.format(mesd, startmessage, list);
+        console.log(sauce);
+        server_process.stdin.write(sauce+'\r');
+    }
+    
+    // Grab JSON from an url 
+    function JSONGrabber(url, callback) {
+        http.get(url, function(res){
+            var data = '';
+
+            res.on('data', function (chunk){
+                data += chunk;
+            });
+
+            res.on('end',function(){
+                var obj = JSON.parse(data);
+                callback(true, obj);
+            })
+
+        }).on('error', function(e) {
+            callback(false, e.message);
+        });
+    }
+
     function getCurrentSongData(callback) {
-        request({
-            url: "http://radio.djazz.se/icecast.php",
-            json: true
-        }, function (error, response, body) {
-            if (!error && response.statusCode === 200) {
-                if(body.title != null) {
-                    var theTitle = new Buffer(body.title, "utf8").toString("utf8");
+        JSONGrabber("http://radio.djazz.se/icecast.php", function(success, content) {
+            if(success) {
+                if(content.title != null) {
+                    var theTitle = new Buffer(content.title, "utf8").toString("utf8");
                     var splitUp = theTitle.replace(/\&amp;/g, "&").split(" - ");
                     if(splitUp.length===2) {
                         theTitle=splitUp[1]+(splitUp[0]?" by "+splitUp[0]:"");
                     }
-                    callback(theTitle, body.listeners, true);
+                    callback(theTitle, content.listeners, true);
                 } else {
                     callback("Parasprite Radio is offline!", "", false);
                 }
@@ -45,6 +89,7 @@ var exec = require('child_process'),
                 break;
         }
         if(server_process) {
+            mylog("<!BOT_"+settings.botname+"> Sent '"+def.text+"' to "+user);
             server_process.stdin.write("tellraw "+user+" "+JSON.stringify(def)+"\r");
         }
     }
@@ -62,6 +107,13 @@ var exec = require('child_process'),
         }
         else if(simplified[0]==="!clear") {
             server_process.stdin.write("weather clear\r");
+        }
+        else if(simplified[0]==="!warps") {
+        var dimension = simplified[1]!=null ? (simplified[1].toLowerCase() === "overworld" || simplified[1].toLowerCase() === "nether" || simplified[1].toLowerCase() === "end" ? simplified[1] : "overworld") : "overworld"
+            sendMessage(username, "--- Currently available warps for "+dimension+" ---", "dark_green", 3);
+            warpWorker("Click on any of these to teleport: ", username, dimension);
+            sendMessage(username, "WARNING! DO NOT USE "+dimension.toUpperCase()+" WARPS IN ANY OTHER DIMENSION!!!", "red", 3);
+            sendMessage(username, "End of warps", "green", 3);
         }
     }
     
@@ -109,6 +161,17 @@ var exec = require('child_process'),
     rl.on('line', function (line) {
         if (line === '') {
             return;
+        } else if(line.indexOf("!bot ")!==-1) {
+            var split = line.split(" ");
+            var command = split[1];
+            var msg = split.slice(2).join(" ");
+            if(command === "say") {
+                sendMessage("@a", msg, "white", 1);
+            } else if(command === "act") {
+                sendMessage("@a", msg, "white", 2);
+            } else {
+                mylog("<!BOT_"+settings.botname+"> Unrecognized Command '"+command+"'");
+            }
         } else {
             if(server_process){
                 server_process.stdin.write(line+'\r');

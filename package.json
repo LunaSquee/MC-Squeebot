@@ -5,7 +5,6 @@
   "main": "run.js",
   "dependencies": {
     "colors": "~1.0.3",
-    "request": "~2.46.0"
   },
   "devDependencies": {},
   "author": "Evert Prants"

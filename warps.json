@@ -1,0 +1,9 @@
+{
+    "message":"Click on any of these to teleport: ",
+    "overworld": {
+        "Mountain Base":["33 71 556", "yellow"]
+    },
+    "nether": {
+        "Base Portal":["1 54 76", "red"]
+    }
+}
