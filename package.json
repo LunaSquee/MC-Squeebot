@@ -4,7 +4,7 @@
   "description": "Node.js Minecraft chat bot",
   "main": "run.js",
   "dependencies": {
-    "colors": "~1.0.3",
+    "colors": "~1.0.3"
   },
   "devDependencies": {},
   "author": "Evert Prants"

@@ -10,5 +10,5 @@ A cool bot that uses [node.js](http://nodejs.org/) and runs a minecraft server, 
 
 ### Warps
 The file `warps.json` contains the "warps" for dimensions. Warps are basically public places where every player can teleport to.
-Adding a warp for a dimension goes like this: `"WARP NAME":["xCoord yCoord zCoord", "COLOR"]` Click [here](http://www.minecraftforum.net/forums/minecraft-discussion/redstone-discussion-and/351959#TEXTUALcolors) for a list of colors that you can use.
+Adding a warp for a dimension goes like this: `"WARP NAME":["xCoord yCoord zCoord", "COLOR", "DIMENSION"]` Click [here](http://www.minecraftforum.net/forums/minecraft-discussion/redstone-discussion-and/351959#TEXTUALcolors) for a list of colors that you can use.
 (I will add a console command for adding warps soon!)

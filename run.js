@@ -9,32 +9,43 @@ var exec = require('child_process'),
     settings = require('./settings.json'),      // Settings file
     serverdir = __dirname+"/"+settings.cwd,  // Minecraft server directory
     server_process = null,                      // Server process
-    commandslist = ["!commands - All commands", "!np - Currently playing song", "!warps <dimension> - List of warps for that dimension"];
+    commandslist = ["!commands - All commands", "!np - Currently playing song", "!warps [<dimension>] - List of warps for that dimension", "!warp <location> - Warp to a location"];
     
     // ADDONS
 var warps = require('./warps.json');
 
     function listWarps(requester, dim) {
         var extlist = [];
-        
-        if(!(dim in warps))
-            return [''];
-        
-        for(var loc in warps[dim]) {
-            var obj = warps[dim][loc];
-            extlist.push("{\"text\":\"["+loc+"] \", \"clickEvent\":{\"action\":\"run_command\", \"value\":\"/tp "+requester+" "+obj[0]+"\"}, \"color\":\""+obj[1]+"\"}");
+
+        for(var loc in warps.locations) {
+            var obj = warps.locations[loc];
+            if(obj[2] === dim) {
+                extlist.push({text:"["+loc+"]", clickEvent:{action:"run_command", value:"/tp "+requester+" "+obj[0]}, hoverEvent:{action:"show_text", value:{text:obj[0], color:"blue"}}, color:obj[1]});
+            }
         }
-        return extlist;
+        return JSON.stringify(extlist);
     }
     
-    function warpWorker(startmessage, username, dimension) {
+    function warpWorker(username, dimension) {
         var lowercase = dimension.toLowerCase();
         var dimensionVerify = (lowercase === "overworld" || lowercase === "nether" || lowercase === "end" ? lowercase : "overworld");
-        var list = listWarps(username, dimensionVerify).join(", ");
-        var mesd = "tellraw "+username+" {\"text\":\"%s\", \"extra\": [%s]}";
-        var sauce = util.format(mesd, startmessage, list);
+        var list = listWarps(username, dimensionVerify);
+        var mesd = "tellraw "+username+" {\"text\":\"%s\", \"extra\": %s}";
+        var sauce = util.format(mesd, warps.message, list);
         console.log(sauce);
         server_process.stdin.write(sauce+'\r');
+    }
+    
+    function warp(username, mesg) {
+        var loc = mesg.substring(6);
+        console.log(loc);
+        if(loc != null && loc in warps.locations){
+            var jsn = JSON.stringify({text:"Warped to ", color:"dark_aqua", extra:[{text:"["+loc+"]", color:warps.locations[loc][1], hoverEvent:{action:"show_text", value:{text:warps.locations[loc][0], color:"blue"}}}]});
+            server_process.stdin.write('tp '+username+' '+warps.locations[loc][0]+'\r');
+            server_process.stdin.write('tellraw '+username+' '+jsn+'\r');
+        } else {
+            sendMessage(username, "That warp does not exist.", "red", 3);
+        }
     }
     
     // Grab JSON from an url 
@@ -108,10 +119,13 @@ var warps = require('./warps.json');
         else if(simplified[0]==="!clear") {
             server_process.stdin.write("weather clear\r");
         }
+        else if(simplified[0]==="!warp") {
+            warp(username, message);
+        }
         else if(simplified[0]==="!warps") {
         var dimension = simplified[1]!=null ? (simplified[1].toLowerCase() === "overworld" || simplified[1].toLowerCase() === "nether" || simplified[1].toLowerCase() === "end" ? simplified[1] : "overworld") : "overworld"
             sendMessage(username, "--- Currently available warps for "+dimension+" ---", "dark_green", 3);
-            warpWorker("Click on any of these to teleport: ", username, dimension);
+            warpWorker(username, dimension);
             sendMessage(username, "WARNING! DO NOT USE "+dimension.toUpperCase()+" WARPS IN ANY OTHER DIMENSION!!!", "red", 3);
             sendMessage(username, "End of warps", "green", 3);
         }
