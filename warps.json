@@ -1,7 +1,7 @@
 {
     "message":"Do !warp <location> to teleport to these: ",
-    "locations":{
-        "Mountain Base":["33 71 556", "yellow", "overworld"],
-        "Base Portal":["1 54 76", "red", "nether"]
+    "locations": {
+        "Mountain Base":["33 71 556","yellow","overworld"],
+        "Base Portal":["1 54 76","red","nether"]
     }
 }

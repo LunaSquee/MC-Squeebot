@@ -11,4 +11,6 @@ A cool bot that uses [node.js](http://nodejs.org/) and runs a minecraft server, 
 ### Warps
 The file `warps.json` contains the "warps" for dimensions. Warps are basically public places where every player can teleport to.
 Adding a warp for a dimension goes like this: `"WARP NAME":["xCoord yCoord zCoord", "COLOR", "DIMENSION"]` Click [here](http://www.minecraftforum.net/forums/minecraft-discussion/redstone-discussion-and/351959#TEXTUALcolors) for a list of colors that you can use.
-(I will add a console command for adding warps soon!)
+
+##### Adding warps from the console
+To add a warp you must type in the following line in console: `!bot warp add x y z dimension color name`. `dimension` can be overworld, nether or end; color must be any one of [these](http://www.minecraftforum.net/forums/minecraft-discussion/redstone-discussion-and/351959#TEXTUALcolors) colors; name can have spaces in it, for example "Diamond Block". Once you have added the warp, type the following line in console: `!bot warp save`, this writes the created warps to the `warps.json` file.

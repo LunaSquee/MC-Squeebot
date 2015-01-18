@@ -32,7 +32,6 @@ var warps = require('./warps.json');
         var list = listWarps(username, dimensionVerify);
         var mesd = "tellraw "+username+" {\"text\":\"%s\", \"extra\": %s}";
         var sauce = util.format(mesd, warps.message, list);
-        console.log(sauce);
         server_process.stdin.write(sauce+'\r');
     }
     
@@ -183,6 +182,21 @@ var warps = require('./warps.json');
                 sendMessage("@a", msg, "white", 1);
             } else if(command === "act") {
                 sendMessage("@a", msg, "white", 2);
+            } else if(command === "warp") {
+                if(split[2] == "add") {
+                    var datar = getWarpAddArguments(line);
+                    if(datar) {
+                        var newconstr = [datar.cString, datar.c, datar.d];
+                        warps.locations[datar.n] = newconstr;
+                        mylog("<!BOT_"+settings.botname+"> Added warp "+datar.n+":"+newconstr);
+                    } else {
+                        mylog("<!BOT_"+settings.botname+"> Usage: !bot "+command+" <"+split[2]+"/save> <x> <y> <z> <dimension> <color> <name>");
+                    }
+                } else if(split[2] == "save"){
+                    ReWriteWarpFile();
+                } else {
+                    mylog("<!BOT_"+settings.botname+"> Usage: !bot "+command+" <add/save> <x> <y> <z> <dimension> <color> <name>");
+                }
             } else {
                 mylog("<!BOT_"+settings.botname+"> Unrecognized Command '"+command+"'");
             }
@@ -202,6 +216,35 @@ var warps = require('./warps.json');
         console.log.apply(console, Array.prototype.slice.call(arguments));
         // rl.resume();
         rl._refreshLine();
+    }
+    
+    function ReWriteWarpFile() {
+        mylog("<!BOT_"+settings.botname+"> Saving warps.json...");
+        fs.writeFile('./warps.json', JSON.stringify(warps), function (err) {
+            if (err) return console.log(err);
+            mylog("<!BOT_"+settings.botname+"> Saved warps.json.");
+        });
+    }
+    
+    function getWarpAddArguments(message) {
+        var splitit = message.split(" ");
+        if(message.length >= 8){
+            // !bot warp add x y z dimension color name
+            var xCoord = parseInt(splitit[3]);
+            var yCoord = parseInt(splitit[4]);
+            var zCoord = parseInt(splitit[5]);
+            var dimension = splitit[6];
+            var color = splitit[7];
+            var name = splitit.splice(8);
+            
+            if(isNaN(xCoord) || isNaN(yCoord) || isNaN(zCoord))
+                return null;
+            
+            if(dimension != "overworld" && dimension != "nether" && dimension != "end")
+                return null;
+            
+            return {x:xCoord, y:yCoord, z:zCoord, d:dimension, c:color, n:name.join(" "), cString:"%s %s %s".format(xCoord,yCoord,zCoord)};
+        }
     }
     
     String.prototype.format = function(){
