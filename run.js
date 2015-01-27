@@ -11,6 +11,10 @@ var exec = require('child_process'),
     serverdir = __dirname+"/"+settings.cwd,  // Minecraft server directory
     server_process = null,                      // Server process
     commandslist = ["!commands - All commands", "!np - Currently playing song", "!warps [<dimension>] - List of warps for that dimension", "!warp <location> - Warp to a location"];
+
+process.on('uncaughtException', function (err) {
+    console.log(err);
+});
     
     // ADDONS
 var warps = require('./warps.json');
