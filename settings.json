@@ -3,5 +3,6 @@
     "ramMax":1024,
     "jarname":"minecraft_server.jar",
     "botname":"Squeebot",
-    "cwd":"server"
+    "cwd":"server",
+    "ircRelayServer":"localhost"
 }

@@ -98,23 +98,13 @@ var warps = require('./warps.json');
             }
         });
     }
-
-    function ircDataReceiveHandle(data, client) {
-	if(data.match(/NOTICE Auth :/) != null){client.write('JOIN #BronyTalk\r\n');}
-	var ircMessage = data.match(/:([^!]*)[^ ]* PRIVMSG #BronyTalk :(.*)/);
-	if (ircMessage != null){
-		sendMessage("@a", ircMessage[1]+': '+ircMessage[2], "white", 1);
-	}
-    }
     
     function initIrc() {
-	var client = net.connect({port: 6667, host: 'irc.canternet.org'},
+	var client = net.connect({port: 9977, host: settings.ircRelayServer},
 		function() { //'connect' listener
 			console.log('connected to server!');
 			client.setEncoding('utf8');
-			client.on('data', function(chunk) { if(chunk.match(/PING :(.*)/) != null){client.write('PONG :'+chunk.match(/PING :(.*)/)[1]+'\r\n')}else{ircDataReceiveHandle(chunk, client);}});
-			client.write('NICK SqueebotMC\r\n');
-			client.write('USER SqueebotMC djazz.se irc.canternet.org :SqueebotMC\r\n');
+			client.on('data', function(chunk) { var ircMessage=chunk.match(/([^:]*):([^:]*):(.*)/); if (ircMessage != null){sendMessage("@a", '['+ircMessage[2]+'] '+ircMessage[1]+': '+ircMessage[3], "white", 1);}});
 	});
     }
     
