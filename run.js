@@ -14,6 +14,19 @@ var exec = require('child_process'),
     // ADDONS
 var warps = require('./warps.json');
 
+    function isOp(username) {
+        var opSuccess = null;
+        var obj = JSON.parse(fs.readFileSync(serverdir+'/ops.json', 'utf8'));
+        if(obj) {
+            obj.forEach(function(arr) {
+                if(arr.name === username){
+                    opSuccess = [true, arr];
+                }
+            });
+        }
+        return opSuccess;
+    }
+    
     function listWarps(requester, dim) {
         var extlist = [];
 
@@ -119,7 +132,40 @@ var warps = require('./warps.json');
             server_process.stdin.write("weather clear\r");
         }
         else if(simplified[0]==="!warp") {
-            warp(username, message);
+            var op = isOp(username) != null;
+            if(simplified[1] == "add") {
+                if(op) {
+                    var datar = getWarpAddArguments(message, 1);
+                    if(datar) {
+                        var newconstr = [datar.cString, datar.c, datar.d];
+                        warps.locations[datar.n] = newconstr;
+                        sendMessage(username, "Added warp "+datar.n+":"+newconstr, "green", 1);
+                    } else {
+                        sendMessage(username, "Usage: !warp add <x> <y> <z> <dimension> <color> <name>", "red", 1);
+                    }
+                } else {
+                    sendMessage(username, "You must be an opped player to do that!", "red", 1);
+                }
+            } else if(simplified[1] == "save"){
+                if(op) {
+                    ReWriteWarpFile(username);
+                } else {
+                    sendMessage(username, "You must be an opped player to do that!", "red", 1);
+                }
+            } else if(simplified[1] == "remove"){
+                if(op) {
+                    if(simplified[2] in warps.locations) {
+                        delete warps.locations[simplified[2]];
+                        sendMessage(username, "Deleted warp "+simplified[2]+"", "green", 1);
+                    } else {
+                        sendMessage(username, "That warp does not exist!", "red", 1);
+                    }
+                } else {
+                    sendMessage(username, "You do not have permission to do that!", "red", 1);
+                }
+            } else {
+                warp(username, message);
+            }
         }
         else if(simplified[0]==="!warps") {
         var dimension = simplified[1]!=null ? (simplified[1].toLowerCase() === "overworld" || simplified[1].toLowerCase() === "nether" || simplified[1].toLowerCase() === "end" ? simplified[1] : "overworld") : "overworld"
@@ -184,7 +230,7 @@ var warps = require('./warps.json');
                 sendMessage("@a", msg, "white", 2);
             } else if(command === "warp") {
                 if(split[2] == "add") {
-                    var datar = getWarpAddArguments(line);
+                    var datar = getWarpAddArguments(line, 0);
                     if(datar) {
                         var newconstr = [datar.cString, datar.c, datar.d];
                         warps.locations[datar.n] = newconstr;
@@ -193,7 +239,14 @@ var warps = require('./warps.json');
                         mylog("<!BOT_"+settings.botname+"> Usage: !bot "+command+" <"+split[2]+"/save> <x> <y> <z> <dimension> <color> <name>");
                     }
                 } else if(split[2] == "save"){
-                    ReWriteWarpFile();
+                    ReWriteWarpFile(null);
+                } else if(split[2] == "remove"){
+                    if(split[3] in warps.locations) {
+                        delete warps.locations[split[3]];
+                        mylog("<!BOT_"+settings.botname+"> Warp "+split[3]+" has been removed!");
+                    } else {
+                        mylog("<!BOT_"+settings.botname+"> That warp does not exist!");
+                    }
                 } else {
                     mylog("<!BOT_"+settings.botname+"> Usage: !bot "+command+" <add/save> <x> <y> <z> <dimension> <color> <name>");
                 }
@@ -218,24 +271,28 @@ var warps = require('./warps.json');
         rl._refreshLine();
     }
     
-    function ReWriteWarpFile() {
+    function ReWriteWarpFile(username) {
         mylog("<!BOT_"+settings.botname+"> Saving warps.json...");
         fs.writeFile('./warps.json', JSON.stringify(warps), function (err) {
             if (err) return console.log(err);
-            mylog("<!BOT_"+settings.botname+"> Saved warps.json.");
+            if(username){
+                sendMessage(username, "Saved warps.json!", "green", 1);
+            } else {
+                mylog("<!BOT_"+settings.botname+"> Saved warps.json.");
+            }
         });
     }
     
-    function getWarpAddArguments(message) {
+    function getWarpAddArguments(message, imv) {
         var splitit = message.split(" ");
-        if(message.length >= 8){
+        if(message.length >= 8-imv){
             // !bot warp add x y z dimension color name
-            var xCoord = parseInt(splitit[3]);
-            var yCoord = parseInt(splitit[4]);
-            var zCoord = parseInt(splitit[5]);
-            var dimension = splitit[6];
-            var color = splitit[7];
-            var name = splitit.splice(8);
+            var xCoord = parseInt(splitit[3-imv]);
+            var yCoord = parseInt(splitit[4-imv]);
+            var zCoord = parseInt(splitit[5-imv]);
+            var dimension = splitit[6-imv];
+            var color = splitit[7-imv];
+            var name = splitit.splice(8-imv);
             
             if(isNaN(xCoord) || isNaN(yCoord) || isNaN(zCoord))
                 return null;
