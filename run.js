@@ -2,6 +2,7 @@
 var exec = require('child_process'),
     //request = require('request'),
     http = require('http'),
+    net = require('net'),
     readline = require('readline'),
     fs = require('fs'),
     util = require('util'),
@@ -10,6 +11,10 @@ var exec = require('child_process'),
     serverdir = __dirname+"/"+settings.cwd,  // Minecraft server directory
     server_process = null,                      // Server process
     commandslist = ["!commands - All commands", "!np - Currently playing song", "!warps [<dimension>] - List of warps for that dimension", "!warp <location> - Warp to a location"];
+
+process.on('uncaughtException', function (err) {
+    console.log(err);
+});
     
     // ADDONS
 var warps = require('./warps.json');
@@ -96,6 +101,15 @@ var warps = require('./warps.json');
                 callback("Parasprite Radio is offline!", "", false);
             }
         });
+    }
+    
+    function initIrc() {
+	var client = net.connect({port: 9977, host: settings.ircRelayServer},
+		function() { //'connect' listener
+			console.log('connected to server!');
+			client.setEncoding('utf8');
+			client.on('data', function(chunk) { var ircMessage=chunk.match(/([^:]*):([^:]*):(.*)/); if (ircMessage != null){sendMessage("@a", '['+ircMessage[2]+'] '+ircMessage[1]+': '+ircMessage[3], "white", 1);}});
+	});
     }
     
     function sendMessage(user, msg, color, type) {
@@ -193,6 +207,7 @@ var warps = require('./warps.json');
         ["-Xms"+settings.ramStart+"M", "-Xmx"+settings.ramMax+"M", "-jar", settings.jarname, "nogui"],
         { cwd:serverdir }
     );
+    initIrc();
     
     server_process.stdout.on('data', function(data) {
         data.toString().trim().split("\n").forEach(function(d) {
