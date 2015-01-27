@@ -2,6 +2,7 @@
 var exec = require('child_process'),
     //request = require('request'),
     http = require('http'),
+    net = require('net'),
     readline = require('readline'),
     fs = require('fs'),
     util = require('util'),
@@ -96,6 +97,25 @@ var warps = require('./warps.json');
                 callback("Parasprite Radio is offline!", "", false);
             }
         });
+    }
+
+    function ircDataReceiveHandle(data, client) {
+	if(data.match(/NOTICE Auth :/) != null){client.write('JOIN #BronyTalk\r\n');}
+	var ircMessage = data.match(/:([^!]*)[^ ]* PRIVMSG #BronyTalk :(.*)/);
+	if (ircMessage != null){
+		sendMessage("@a", ircMessage[1]+': '+ircMessage[2], "white", 1);
+	}
+    }
+    
+    function initIrc() {
+	var client = net.connect({port: 6667, host: 'irc.canternet.org'},
+		function() { //'connect' listener
+			console.log('connected to server!');
+			client.setEncoding('utf8');
+			client.on('data', function(chunk) { if(chunk.match(/PING :(.*)/) != null){client.write('PONG :'+chunk.match(/PING :(.*)/)[1]+'\r\n')}else{ircDataReceiveHandle(chunk, client);}});
+			client.write('NICK SqueebotMC\r\n');
+			client.write('USER SqueebotMC djazz.se irc.canternet.org :SqueebotMC\r\n');
+	});
     }
     
     function sendMessage(user, msg, color, type) {
@@ -193,6 +213,7 @@ var warps = require('./warps.json');
         ["-Xms"+settings.ramStart+"M", "-Xmx"+settings.ramMax+"M", "-jar", settings.jarname, "nogui"],
         { cwd:serverdir }
     );
+    initIrc();
     
     server_process.stdout.on('data', function(data) {
         data.toString().trim().split("\n").forEach(function(d) {
