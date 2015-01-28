@@ -1,11 +1,14 @@
 {
   "name": "MC-Squeebot",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Node.js Minecraft chat bot",
+  "private": true,
   "main": "run.js",
   "dependencies": {
     "colors": "~1.0.3"
   },
-  "devDependencies": {},
-  "author": "Evert Prants"
+  "author": "Evert Prants",
+  "scripts": {
+    "start": "./run.js"
+  }
 }
