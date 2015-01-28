@@ -5,8 +5,31 @@ A cool bot that uses [node.js](http://nodejs.org/) and runs a minecraft server, 
 1. Clone this repository 
 2. Create a folder "server" and put a [minecraft server jar](https://minecraft.net/download) file into it (named `minecraft_server.jar`)
 3. Install the dependencies `npm install`
-4. Change settings in `settings.json`
+4. See the instructions below on how to create the settings file
 5. Start the server `node run.js`
+
+### Requirements
+You must make a file called "settings.json" that has your bot's name, minecraft location and some other settings.
+
+Template:
+```
+{
+    "botname": "Squeebot",
+
+    "ramStart": 524,
+    "ramMax": 1024,
+    "jarname": "minecraft_server.jar",
+    "cwd": "server",
+
+    "ircRelay": {
+        "enabled": false,
+        "host": "localhost",
+        "port": 9977,
+        "password": "******",
+        "reconnectInterval": 30
+    }
+}
+```
 
 ### Warps
 The file `warps.json` contains the "warps" for dimensions. Warps are basically public places where every player can teleport to.
