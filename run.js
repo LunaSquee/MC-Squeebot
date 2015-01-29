@@ -318,7 +318,7 @@ function mylog() {
 
 function ReWriteWarpFile(username) {
     mylog("<!BOT_"+settings.botname+"> Saving warps.json...");
-    fs.writeFile('./warps.json', JSON.stringify(warps), function (err) {
+    fs.writeFile(__dirname+'/warps.json', JSON.stringify(warps), function (err) {
         if (err) return console.log(err);
         if(username){
             sendMessage(username, "Saved warps.json!", "green", 1);
