@@ -107,7 +107,18 @@ function initIrc() {
     if (client) return;
     if (!settings.ircRelay.enabled) return;
 
-    mylog('RELAY: Connecting to %s:%d', settings.ircRelay.host, settings.ircRelay.port);
+    var lastDataTimeout = null;
+
+    function keepAlive() {
+        clearTimeout(lastDataTimeout);
+        lastDataTimeout = setTimeout(function () {
+            if (!client) return;
+            info('RELAY: Connection timed out');
+            client.destroy();
+        }, 30*1000);
+    }
+
+    info('RELAY: Connecting to %s:%d', settings.ircRelay.host, settings.ircRelay.port);
     client = net.connect({port: settings.ircRelay.port, host: settings.ircRelay.host}, function () {
         clearTimeout(connectTimer);
         client.write(settings.ircRelay.password);
@@ -118,28 +129,34 @@ function initIrc() {
         var ircMessage = data.match(/([^:]*):([^:]*):(.*)/);
         if (ircMessage != null) {
             sendMessage("@a", '['+ircMessage[2]+'] '+ircMessage[1]+': '+ircMessage[3], "white", 3);
+        } else if (data === 'ping') {
+            client.write('pong');
+            //info('RELAY: Responding to ping');
         } else {
-            mylog('RELAY: Server says: %s', data);
+            info('RELAY: Server says: %s', data);
         }
+        keepAlive();
     });
     client.once('end', function () {
-        mylog('RELAY: Disconnected');
+        info('RELAY: Disconnected');
         clearTimeout(connectTimer);
     });
-    client.once('error', function (err) {
-        mylog('RELAY: '+err);
-        clearTimeout(connectTimer);
-        client.end();
+    client.on('error', function (err) {
+        info('RELAY: '+err);
+        client.destroy();
     });
     client.once('close', function () {
+        info('RELAY: Connection closed');
         client = null;
         clearTimeout(connectTimer);
+        clearTimeout(lastDataTimeout);
         setTimeout(initIrc, settings.ircRelay.reconnectInterval*1000);
     });
     var connectTimer = setTimeout(function () {
-        mylog('RELAY: Timed out');
+        info('RELAY: Timed out');
         client && client.destroy();
     }, 5*1000);
+
 }
 
 function sendMessage(user, msg, color, type) {
@@ -314,6 +331,11 @@ function mylog() {
     console.log.apply(console, Array.prototype.slice.call(arguments));
     // rl.resume();
     rl._refreshLine();
+}
+
+function info() {
+    arguments[0] = "  -- ".magenta+arguments[0];
+    mylog(util.format.apply(null, arguments));
 }
 
 function ReWriteWarpFile(username) {
