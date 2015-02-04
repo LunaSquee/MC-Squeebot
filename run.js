@@ -18,13 +18,16 @@ process.on('uncaughtException', function (err) {
 
 // ADDONS
 var warps = require('./warps.json');
+var uuids = {};
 
 function isOp(username) {
+    if(!username in uuids) return null;
+
     var opSuccess = null;
     var obj = JSON.parse(fs.readFileSync(serverdir+'/ops.json', 'utf8'));
     if(obj) {
         obj.forEach(function(arr) {
-            if(arr.name === username){
+            if(arr.uuid === uuids[username]){
                 opSuccess = [true, arr];
             }
         });
@@ -215,9 +218,10 @@ function handleMessage(username, message, simplified) {
             }
         } else if(simplified[1] == "remove"){
             if(op) {
-                if(simplified[2] in warps.locations) {
-                    delete warps.locations[simplified[2]];
-                    sendMessage(username, "Deleted warp "+simplified[2]+"", "green", 1);
+                var locat = simplified.slice(2).join(" ");
+                if(locat in warps.locations) {
+                    delete warps.locations[locat];
+                    sendMessage(username, "Deleted warp "+locat+"", "green", 1);
                 } else {
                     sendMessage(username, "That warp does not exist!", "red", 1);
                 }
@@ -239,12 +243,21 @@ function handleMessage(username, message, simplified) {
 
 function processMessage(inp) {
     mylog(inp);
-    var thing = inp.trim().match(/^\[(\d\d:\d\d:\d\d)\] \[([\w ]+)\/(\w+)\]: (.*)$/);
+    var thing = inp.trim().match(/^\[(\d\d:\d\d:\d\d)\] \[([\w# ]+)\/(\w+)\]: (.*)$/);
     if(thing) {
-        var usrmsg = thing[4].match(/^<([^>]+)> (.*)/);
-        if(usrmsg) {
-            var simplified = usrmsg[2].replace(/\:/g, ' ').replace(/\,/g, ' ').replace(/\./g, ' ').replace(/\?/g, ' ').trim().split(' ');
-            handleMessage(usrmsg[1], usrmsg[2], simplified)
+        if(thing[2].toLowerCase().indexOf("user auth") === 0) {
+            var uuidmsg = thing[4].match(/^UUID of player (.*) is (.*)$/);
+            if(uuidmsg) {
+                mylog("<!BOT_"+settings.botname+"> "+(uuidmsg[1] in uuids ? "Updated" : "Gathered")+" the UUID of "+uuidmsg[1]+" successfully!");
+                uuids[uuidmsg[1]] = uuidmsg[2];
+                return;
+            }
+        } else {
+            var usrmsg = thing[4].match(/^<([^>]+)> (.*)/);
+            if(usrmsg) {
+                var simplified = usrmsg[2].replace(/\:/g, ' ').replace(/\,/g, ' ').replace(/\./g, ' ').replace(/\?/g, ' ').trim().split(' ');
+                handleMessage(usrmsg[1], usrmsg[2], simplified)
+            }
         }
     }
 }
@@ -282,31 +295,32 @@ rl.on('line', function (line) {
     if (line === '') {
         return;
     } else if(line.indexOf("!bot ")!==-1) {
-        var split = line.split(" ");
-        var command = split[1];
-        var msg = split.slice(2).join(" ");
+        var spliti = line.split(" ");
+        var command = spliti[1];
+        var msg = spliti.slice(2).join(" ");
         if(command === "say") {
             sendMessage("@a", msg, "white", 1);
         } else if(command === "act") {
             sendMessage("@a", msg, "white", 2);
         } else if(command === "warp") {
-            if(split[2] == "add") {
+            if(spliti[2] == "add") {
                 var datar = getWarpAddArguments(line, 0);
                 if(datar) {
                     var newconstr = [datar.cString, datar.c, datar.d];
                     warps.locations[datar.n] = newconstr;
                     mylog("<!BOT_"+settings.botname+"> Added warp "+datar.n+":"+newconstr);
                 } else {
-                    mylog("<!BOT_"+settings.botname+"> Usage: !bot "+command+" <"+split[2]+"/save> <x> <y> <z> <dimension> <color> <name>");
+                    mylog("<!BOT_"+settings.botname+"> Usage: !bot "+command+" <"+spliti[2]+"/save> <x> <y> <z> <dimension> <color> <name>");
                 }
-            } else if(split[2] == "save"){
+            } else if(spliti[2] == "save"){
                 ReWriteWarpFile(null);
-            } else if(split[2] == "remove"){
-                if(split[3] in warps.locations) {
-                    delete warps.locations[split[3]];
-                    mylog("<!BOT_"+settings.botname+"> Warp "+split[3]+" has been removed!");
+            } else if(spliti[2] == "remove"){
+                var locat = spliti.slice(3).join(" ");
+                if(locat in warps.locations) {
+                    delete warps.locations[locat];
+                    mylog("<!BOT_"+settings.botname+"> Warp "+locat+" has been removed!");
                 } else {
-                    mylog("<!BOT_"+settings.botname+"> That warp does not exist!");
+                    mylog("<!BOT_"+settings.botname+"> Warp \""+locat+"\" does not exist!");
                 }
             } else {
                 mylog("<!BOT_"+settings.botname+"> Usage: !bot "+command+" <add/save> <x> <y> <z> <dimension> <color> <name>");
