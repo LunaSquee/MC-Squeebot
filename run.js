@@ -10,7 +10,8 @@ var exec = require('child_process'),
     serverdir = __dirname+"/"+settings.cwd,  // Minecraft server directory
     server_process = null,                      // Server process
     commandslist = ["!commands - All commands", "!np - Currently playing song", "!warps [<dimension>] - List of warps for that dimension", "!warp <location> - Warp to a location"],
-    client = null;
+    client = null,
+    relayMuted = false;
 
 process.on('uncaughtException', function (err) {
     mylog(err);
@@ -129,9 +130,25 @@ function initIrc() {
     client.setEncoding('utf8');
     
     client.on('data', function (data) {
-        var ircMessage = data.match(/([^:]*):([^:]*):(.*)/);
+        var ircMessage = data.match(/([^:]*)>([^:]*):([^:]*):(.*)/);
         if (ircMessage != null) {
-            sendMessage("@a", '['+ircMessage[2]+'] '+ircMessage[1]+': '+ircMessage[3], "white", 3);
+            if(relayMuted) return;
+            var type = ircMessage[1];
+            if(type==="PRIVMSG") {
+                sendMessage("@a", '['+ircMessage[3]+'] '+ircMessage[2]+': '+ircMessage[4], "white", 3);
+            } else if(type==="JOIN") {
+                sendMessage("@a", '['+ircMessage[3]+'] '+ircMessage[2]+''+ircMessage[4]+''+ircMessage[3], "dark_green", 3);
+            } else if(type==="PART") {
+                sendMessage("@a", '['+ircMessage[3]+'] '+ircMessage[2]+''+ircMessage[4]+''+ircMessage[3], "red", 3);
+            } else if(type==="KICK") {
+                sendMessage("@a", '['+ircMessage[3]+'] '+ircMessage[2]+''+ircMessage[4], "red", 3);
+            } else if(type==="QUIT") {
+                sendMessage("@a", '[IRC] '+ircMessage[2]+''+ircMessage[4], "red", 3);
+            } else if(type==="NICK") {
+                sendMessage("@a", '[IRC] '+ircMessage[2]+''+ircMessage[4], "yellow", 3);
+            } else if(type==="ACTION") {
+                sendMessage("@a", '['+ircMessage[3]+'] * '+ircMessage[2]+' '+ircMessage[4], "white", 3);
+            }
         } else if (data === 'ping') {
             client.write('pong');
             //info('RELAY: Responding to ping');
@@ -194,6 +211,22 @@ function handleMessage(username, message, simplified) {
     }
     else if(simplified[0]==="!clear") {
         server_process.stdin.write("weather clear\r");
+    }
+    else if(simplified[0]==="!relay") {
+        var op = isOp(username) != null;
+        if(op) {
+            if(simplified[1] && simplified[1].toLowerCase() == "mute") {
+                relayMuted = true;
+                sendMessage("@a", "[IRCRelay] IRC relay has been muted.", "red", 3);
+            } else if(simplified[1] && simplified[1].toLowerCase() == "unmute") {
+                relayMuted = false;
+                sendMessage("@a", "[IRCRelay] IRC relay has been unmuted.", "green", 3);
+            } else {
+                sendMessage(username, "Usage: !relay <mute/unmute>", "red", 1);
+            }
+        } else {
+            sendMessage(username, "You must be an opped player do to that!", "red", 1);
+        }
     }
     else if(simplified[0]==="!warp") {
         var op = isOp(username) != null;
