@@ -20,6 +20,7 @@ Template:
     "ramMax": 1024,
     "jarname": "minecraft_server.jar",
     "cwd": "server",
+    "prefix":"!",
 
     "ircRelay": {
         "enabled": false,

@@ -1,26 +1,144 @@
 #!/usr/bin/env node
-var exec = require('child_process'),
-    http = require('http'),
-    net = require('net'),
-    readline = require('readline'),
-    fs = require('fs'),
-    util = require('util'),
-    colors = require('colors'),
-    settings = require('./settings.json'),      // Settings file
-    serverdir = __dirname+"/"+settings.cwd,  // Minecraft server directory
-    server_process = null,                      // Server process
-    commandslist = ["!commands - All commands", "!np - Currently playing song", "!warps [<dimension>] - List of warps for that dimension", "!warp <location> - Warp to a location", "!playerHead <playerName> - Give yourself the head of a specified player"],
-    client = null,
-    relayMuted = false;
+var exec = require('child_process');
+var http = require('http');
+var net = require('net');
+var readline = require('readline');
+var fs = require('fs');
+var util = require('util');
+var colors = require('colors');
+var settings = require('./settings.json');      // Settings file
+var chatprefix = settings.prefix;               // Prefix for bot commands (Set in settings file!!!)
+var serverdir = __dirname+"/"+settings.cwd;     // Minecraft server directory
+var server_process = null;                      // Server process
+var client = null;                              // IRC Relay client
+var relayMuted = false;                         // Relay muted status
 
 process.on('uncaughtException', function (err) {
     mylog(err);
 });
 
-// ADDONS
-var warps = require('./warps.json');
+// Stored UUIDs of all players for precision OP checking
 var uuids = {};
 
+// ADDONS
+var warps = require('./warps.json');
+
+// This is the list of all your commands.
+// "command":{"action":YOUR FUNCTION HERE, "description":COMMAND USAGE(IF NOT PRESENT, WONT SHOW UP IN !commands)}
+var commands = {
+    "np":{"action":(function(username, message, simplified, op) {
+        getCurrentSongData(function(d, e, i) { 
+            if(i) { 
+                sendMessage("@a", d+" - "+e+" listener"+(e!==1?"s":""), "white", 1);
+            } else { 
+                sendMessage("@a", d, "white", 1);
+            }
+        });
+    }), "description": "- Currently playing song on Parasprite Radio"},
+
+    "help":{"action":(function(username, message, simplified, op) {
+        listCommands();
+    }), "description": "- List of all commands"},
+
+    "clear":{"action":(function(username, message, simplified, op) {
+        server_process.stdin.write("weather clear\r");
+    })},
+
+    "relay":{"action":(function(username, message, simplified, op) {
+        if(op) {
+            if(simplified[1] && simplified[1].toLowerCase() == "mute") {
+                relayMuted = true;
+                sendMessage("@a", "[IRCRelay] IRC relay has been muted.", "red", 3);
+            } else if(simplified[1] && simplified[1].toLowerCase() == "unmute") {
+                relayMuted = false;
+                sendMessage("@a", "[IRCRelay] IRC relay has been unmuted.", "green", 3);
+            } else {
+                sendMessage(username, "Usage: !relay <mute/unmute>", "red", 1);
+            }
+        } else {
+            sendMessage(username, "You must be an opped player do to that!", "red", 1);
+        }
+    })},
+
+    "playerhead":{"action":(function(username, message, simplified, op) {
+        if(simplified[1] !=null ) {
+            var amount = 1;
+            if(simplified[2] && parseInt(simplified[2]))
+                amount = (parseInt(simplified[2]) > 64 ? 64 : simplified[2]);
+            server_process.stdin.write("give "+username+" minecraft:skull "+amount+" 3 {SkullOwner:\""+simplified[1]+"\"}\r");
+        } else {
+            sendMessage(username, "Usage: !playerHead <playerName>", "red", 1);
+        }
+    }), "description": "<playerName> [amount] - Give yourself the head of a specified player"},
+
+    "warps":{"action":(function(username, message, simplified, op) {
+        var dimension = simplified[1]!=null ? (simplified[1].toLowerCase() === "overworld" || simplified[1].toLowerCase() === "nether" || simplified[1].toLowerCase() === "end" ? simplified[1] : "overworld") : "overworld"
+        sendMessage(username, "--- Currently available warps for "+dimension+" ---", "dark_green", 3);
+        warpWorker(username, dimension);
+        sendMessage(username, "WARNING! DO NOT USE "+dimension.toUpperCase()+" WARPS IN ANY OTHER DIMENSION!!!", "red", 3);
+        sendMessage(username, "End of warps", "green", 3);
+    }), "description": "[<dimension>] - List of warps for dimension"},
+
+    "warp":{"action":(function(username, message, simplified, op) {
+        if(simplified[1] == "add") {
+            if(op) {
+                var datar = getWarpAddArguments(message, 1);
+                if(datar) {
+                    var newconstr = [datar.cString, datar.c, datar.d];
+                    warps.locations[datar.n] = newconstr;
+                    sendMessage(username, "Added warp "+datar.n+":"+newconstr, "green", 1);
+                } else {
+                    sendMessage(username, "Usage: !warp add <x> <y> <z> <dimension> <color> <name>", "red", 1);
+                }
+            } else {
+                sendMessage(username, "You must be an opped player to do that!", "red", 1);
+            }
+        } else if(simplified[1] == "save"){
+            if(op) {
+                ReWriteWarpFile(username);
+            } else {
+                sendMessage(username, "You must be an opped player to do that!", "red", 1);
+            }
+        } else if(simplified[1] == "remove"){
+            if(op) {
+                var locat = simplified.slice(2).join(" ");
+                if(locat in warps.locations) {
+                    delete warps.locations[locat];
+                    sendMessage(username, "Deleted warp "+locat+"", "green", 1);
+                } else {
+                    sendMessage(username, "That warp does not exist!", "red", 1);
+                }
+            } else {
+                sendMessage(username, "You do not have permission to do that!", "red", 1);
+            }
+        } else {
+            warp(username, message);
+        }
+    }), "description": "<location> - Warp to a location"},
+}
+
+// API object can be used in addons
+var botapi = {
+    sendMessage: sendMessage,
+    isOp: isOp,
+    JSONGrabber: JSONGrabber,
+    info: info,
+    log: mylog
+}
+
+// List of all commands
+function listCommands() {
+    sendMessage("@a", "--- Currently available commands for "+settings.botname+" ---", "dark_green", 3);
+    for(var command in commands) {
+        var dir = commands[command];
+        if("description" in dir) {
+            sendMessage("@a", chatprefix+command+" "+dir.description, "white", 3);
+        }
+    }
+    sendMessage("@a", "--- End of commands ---", "green", 3);
+}
+
+// Check if player is a server operator or not using their UUID stored in the uuids object. Returns an array.
 function isOp(username) {
     if(!username in uuids) return null;
 
@@ -36,6 +154,7 @@ function isOp(username) {
     return opSuccess;
 }
 
+// List of all warps. Returns a json string.
 function listWarps(requester, dim) {
     var extlist = [];
 
@@ -48,6 +167,7 @@ function listWarps(requester, dim) {
     return JSON.stringify(extlist);
 }
 
+// Print a readable list of warps into the chat.
 function warpWorker(username, dimension) {
     var lowercase = dimension.toLowerCase();
     var dimensionVerify = (lowercase === "overworld" || lowercase === "nether" || lowercase === "end" ? lowercase : "overworld");
@@ -57,9 +177,9 @@ function warpWorker(username, dimension) {
     server_process.stdin.write(sauce+'\r');
 }
 
+// Warp command handler
 function warp(username, mesg) {
     var loc = mesg.substring(6);
-    mylog(loc);
     if(loc != null && loc in warps.locations){
         var jsn = JSON.stringify({text:"Warped to ", color:"dark_aqua", extra:[{text:"["+loc+"]", color:warps.locations[loc][1], hoverEvent:{action:"show_text", value:{text:warps.locations[loc][0], color:"blue"}}}]});
         server_process.stdin.write('tp '+username+' '+warps.locations[loc][0]+'\r');
@@ -88,6 +208,7 @@ function JSONGrabber(url, callback) {
     });
 }
 
+// Grabs song data from icecast (Parasprite Radio)
 function getCurrentSongData(callback) {
     JSONGrabber("http://radio.djazz.se/icecast.php", function(success, content) {
         if(success) {
@@ -107,6 +228,7 @@ function getCurrentSongData(callback) {
     });
 }
 
+// Initializes IRC relay
 function initIrc() {
     if (client) return;
     if (!settings.ircRelay.enabled) return;
@@ -179,6 +301,7 @@ function initIrc() {
 
 }
 
+// Sends a formatted message
 function sendMessage(user, msg, color, type) {
     var def = {text:msg, color:color}
     switch(type) {
@@ -198,92 +321,17 @@ function sendMessage(user, msg, color, type) {
     }
 }
 
+// Handles player-sent messages
 function handleMessage(username, message, simplified) {
-    if(simplified[0]==="!np") {
-        getCurrentSongData(function(d, e, i) { if(i) { sendMessage("@a", d+" - "+e+" listener"+(e!==1?"s":""), "white", 1);} else { sendMessage("@a", d, "white", 1)}});
-    }
-    else if(simplified[0]==="!commands") {
-        sendMessage("@a", "--- Currently available commands for "+settings.botname+" ---", "dark_green", 3);
-        commandslist.forEach(function(d) {
-            sendMessage("@a", d, "white", 3);
-        });
-        sendMessage("@a", "End of commands", "green", 3);
-    }
-    else if(simplified[0]==="!clear") {
-        server_process.stdin.write("weather clear\r");
-    }
-    else if(simplified[0]==="!relay") {
-        var op = isOp(username) != null;
-        if(op) {
-            if(simplified[1] && simplified[1].toLowerCase() == "mute") {
-                relayMuted = true;
-                sendMessage("@a", "[IRCRelay] IRC relay has been muted.", "red", 3);
-            } else if(simplified[1] && simplified[1].toLowerCase() == "unmute") {
-                relayMuted = false;
-                sendMessage("@a", "[IRCRelay] IRC relay has been unmuted.", "green", 3);
-            } else {
-                sendMessage(username, "Usage: !relay <mute/unmute>", "red", 1);
-            }
-        } else {
-            sendMessage(username, "You must be an opped player do to that!", "red", 1);
-        }
-    }
-    else if(simplified[0]==="!playerHead") {
-        if(simplified[1]) {
-            var amount = 0;
-            if(simplified[2] && parseInt(simplified[2]))
-                amount = simplified[2];
-            server_process.stdin.write("give "+username+" minecraft:skull "+amount+" 3 {SkullOwner:\""+simplified[1]+"\"}\r");
-        } else {
-            sendMessage(username, "Usage: !playerHead <playerName>", "red", 1);
-        }
-    }
-    else if(simplified[0]==="!warp") {
-        var op = isOp(username) != null;
-        if(simplified[1] == "add") {
-            if(op) {
-                var datar = getWarpAddArguments(message, 1);
-                if(datar) {
-                    var newconstr = [datar.cString, datar.c, datar.d];
-                    warps.locations[datar.n] = newconstr;
-                    sendMessage(username, "Added warp "+datar.n+":"+newconstr, "green", 1);
-                } else {
-                    sendMessage(username, "Usage: !warp add <x> <y> <z> <dimension> <color> <name>", "red", 1);
-                }
-            } else {
-                sendMessage(username, "You must be an opped player to do that!", "red", 1);
-            }
-        } else if(simplified[1] == "save"){
-            if(op) {
-                ReWriteWarpFile(username);
-            } else {
-                sendMessage(username, "You must be an opped player to do that!", "red", 1);
-            }
-        } else if(simplified[1] == "remove"){
-            if(op) {
-                var locat = simplified.slice(2).join(" ");
-                if(locat in warps.locations) {
-                    delete warps.locations[locat];
-                    sendMessage(username, "Deleted warp "+locat+"", "green", 1);
-                } else {
-                    sendMessage(username, "That warp does not exist!", "red", 1);
-                }
-            } else {
-                sendMessage(username, "You do not have permission to do that!", "red", 1);
-            }
-        } else {
-            warp(username, message);
-        }
-    }
-    else if(simplified[0]==="!warps") {
-    var dimension = simplified[1]!=null ? (simplified[1].toLowerCase() === "overworld" || simplified[1].toLowerCase() === "nether" || simplified[1].toLowerCase() === "end" ? simplified[1] : "overworld") : "overworld"
-        sendMessage(username, "--- Currently available warps for "+dimension+" ---", "dark_green", 3);
-        warpWorker(username, dimension);
-        sendMessage(username, "WARNING! DO NOT USE "+dimension.toUpperCase()+" WARPS IN ANY OTHER DIMENSION!!!", "red", 3);
-        sendMessage(username, "End of warps", "green", 3);
+    var op = isOp(username) != null;
+    if(simplified[0] && simplified[0].indexOf(chatprefix) === 0 && simplified[0].toLowerCase().substring(1) in commands) {
+        var command = commands[simplified[0].toLowerCase().substring(1)];
+        if("action" in command)
+            command.action(username, message, simplified, op);
     }
 }
 
+// Handles all incoming messages from server
 function processMessage(inp) {
     mylog(inp);
     var thing = inp.trim().match(/^\[(\d\d:\d\d:\d\d)\] \[([\w# ]+)\/(\w+)\]: (.*)$/);
@@ -305,24 +353,28 @@ function processMessage(inp) {
     }
 }
 
+// Creates server process
 server_process = exec.spawn(
     "java",
     ["-Xms"+settings.ramStart+"M", "-Xmx"+settings.ramMax+"M", "-jar", settings.jarname, "nogui"],
     { cwd:serverdir }
 );
 
+// Listens for output from server 
 server_process.stdout.on('data', function(data) {
     data.toString().trim().split("\n").forEach(function(d) {
         processMessage(d);
     });
 });
 
+// Listens for errors from server 
 server_process.stderr.on('data', function(data) {
     data.toString().trim().split("\n").forEach(function(d) {
         processMessage(d);
     });
 });
 
+// Server exited event
 server_process.on('exit', function(data) {
     server_process = null;
     process.exit(0);
@@ -380,7 +432,6 @@ rl.on('line', function (line) {
 });
 
 rl.setPrompt(util.format("> ".bold.magenta), 2);
-
 
 function mylog() {
     // rl.pause();
