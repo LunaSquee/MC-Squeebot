@@ -9,7 +9,7 @@ var exec = require('child_process'),
     settings = require('./settings.json'),      // Settings file
     serverdir = __dirname+"/"+settings.cwd,  // Minecraft server directory
     server_process = null,                      // Server process
-    commandslist = ["!commands - All commands", "!np - Currently playing song", "!warps [<dimension>] - List of warps for that dimension", "!warp <location> - Warp to a location"],
+    commandslist = ["!commands - All commands", "!np - Currently playing song", "!warps [<dimension>] - List of warps for that dimension", "!warp <location> - Warp to a location", "!playerHead <playerName> - Give yourself the head of a specified player"],
     client = null,
     relayMuted = false;
 
@@ -226,6 +226,16 @@ function handleMessage(username, message, simplified) {
             }
         } else {
             sendMessage(username, "You must be an opped player do to that!", "red", 1);
+        }
+    }
+    else if(simplified[0]==="!playerHead") {
+        if(simplified[1]) {
+            var amount = 0;
+            if(simplified[2] && parseInt(simplified[2]))
+                amount = simplified[2];
+            server_process.stdin.write("give "+username+" minecraft:skull "+amount+" 3 {SkullOwner:\""+simplified[1]+"\"}\r");
+        } else {
+            sendMessage(username, "Usage: !playerHead <playerName>", "red", 1);
         }
     }
     else if(simplified[0]==="!warp") {
