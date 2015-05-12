@@ -12,6 +12,8 @@ var serverdir = __dirname+"/"+settings.cwd;     // Minecraft server directory
 var server_process = null;                      // Server process
 var client = null;                              // IRC Relay client
 var relayMuted = false;                         // Relay muted status
+var restartCalled = false;                      // True if server is being restarted
+var stopExEula = false;                         // True if the server was shut down because of no EULA file
 
 process.on('uncaughtException', function (err) {
     mylog(err);
@@ -318,6 +320,8 @@ function sendMessage(user, msg, color, type) {
     if (server_process) {
         mylog("<!BOT_"+settings.botname+"> Sent '"+def.text+"' to "+user);
         server_process.stdin.write("tellraw "+user+" "+JSON.stringify(def)+"\r");
+    } else {
+        info("A message was ommited. No server instance!");
     }
 }
 
@@ -336,7 +340,11 @@ function processMessage(inp) {
     mylog(inp);
     var thing = inp.trim().match(/^\[(\d\d:\d\d:\d\d)\] \[([\w# ]+)\/(\w+)\]: (.*)$/);
     if(thing) {
-        if(thing[2].toLowerCase().indexOf("user auth") === 0) {
+        if(thing[2].toLowerCase().indexOf("server thread") === 0 && thing[4].indexOf("EULA") !== -1) {
+            stopExEula = true;
+            info("You need to agree to the EULA before starting the server.");
+            mylog("Please read '"+("server/eula.txt").green+"' and call '!server restart'.");
+        } else if(thing[2].toLowerCase().indexOf("user auth") === 0) {
             var uuidmsg = thing[4].match(/^UUID of player (.*) is (.*)$/);
             if(uuidmsg) {
                 mylog("<!BOT_"+settings.botname+"> "+(uuidmsg[1] in uuids ? "Updated" : "Gathered")+" the UUID of "+uuidmsg[1]+" successfully!");
@@ -354,31 +362,40 @@ function processMessage(inp) {
 }
 
 // Creates server process
-server_process = exec.spawn(
-    "java",
-    ["-Xms"+settings.ramStart+"M", "-Xmx"+settings.ramMax+"M", "-jar", settings.jarname, "nogui"],
-    { cwd:serverdir }
-);
+function spawnserver() {
+    restartCalled = false;
+    stopExEula = false;
+    server_process = exec.spawn(
+        "java",
+        ["-Xms"+settings.ramStart+"M", "-Xmx"+settings.ramMax+"M", "-jar", settings.jarname, "nogui"],
+        { cwd:serverdir }
+    );
 
-// Listens for output from server 
-server_process.stdout.on('data', function(data) {
-    data.toString().trim().split("\n").forEach(function(d) {
-        processMessage(d);
+    // Listens for output from server 
+    server_process.stdout.on('data', function(data) {
+        data.toString().trim().split("\n").forEach(function(d) {
+            processMessage(d);
+        });
     });
-});
 
-// Listens for errors from server 
-server_process.stderr.on('data', function(data) {
-    data.toString().trim().split("\n").forEach(function(d) {
-        processMessage(d);
+    // Listens for errors from server 
+    server_process.stderr.on('data', function(data) {
+        data.toString().trim().split("\n").forEach(function(d) {
+            processMessage(d);
+        });
     });
-});
 
-// Server exited event
-server_process.on('exit', function(data) {
-    server_process = null;
-    process.exit(0);
-});
+    // Server exited event
+    server_process.on('exit', function(data) {
+        server_process = null;
+        if(restartCalled) {
+            spawnserver();
+            info("Restarting server!");
+            return;
+        } else if(stopExEula) return;
+        process.exit(0);
+    });
+}
 
 var rl = readline.createInterface({
     input: process.stdin,
@@ -422,6 +439,18 @@ rl.on('line', function (line) {
             }
         } else {
             mylog("<!BOT_"+settings.botname+"> Unrecognized Command '"+command+"'");
+        }
+    } else if(line.indexOf("!server ") !== -1){
+        var spliti = line.split(" ");
+        if(spliti[1]) {
+            if(spliti[1] === "restart") {
+                restartCalled = true;
+                info("Attempting a restart.");
+                if(server_process)
+                    server_process.stdin.write('stop\r');
+                else
+                    spawnserver();
+            }
         }
     } else {
         if(server_process){
@@ -485,4 +514,5 @@ String.prototype.format = function(){
   return util.format.apply(util, args);
 };
 
+spawnserver();
 initIrc();
