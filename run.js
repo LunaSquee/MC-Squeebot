@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 var exec = require('child_process');
 var http = require('http');
+var url = require('url');
 var net = require('net');
+var sys = require('sys');
+var path = require('path');
 var readline = require('readline');
 var fs = require('fs');
 var util = require('util');
@@ -14,9 +17,14 @@ var client = null;                              // IRC Relay client
 var relayMuted = false;                         // Relay muted status
 var restartCalled = false;                      // True if server is being restarted
 var stopExEula = false;                         // True if the server was shut down because of no EULA file
+var processargs = [];							// Arguments provided from console
 
 process.on('uncaughtException', function (err) {
     mylog(err);
+});
+
+process.argv.forEach(function (val, index, array) {
+  processargs.push(val);
 });
 
 // Stored UUIDs of all players for precision OP checking
@@ -126,6 +134,50 @@ var botapi = {
     JSONGrabber: JSONGrabber,
     info: info,
     log: mylog
+}
+
+// Run a command
+function terminalCommand(command, callback) {
+	var child = exec.exec(command, callback);
+}
+
+function downloadGameserver(version) {
+	var verurl = "http://s3.amazonaws.com/Minecraft.Download/versions/%s/minecraft_server.%s.jar".format(version, version);
+	terminalCommand("mkdir -p ./dumps/", function(err, stdout, stderr) {
+		if(err) {
+			info("An error occured trying to download server file.");
+			return;
+		}
+		var options_e = {
+			host: url.parse(verurl).host,
+			port: 80,
+			path: url.parse(verurl).pathname
+		}
+		var fname = settings.jarname;
+		var fileee = fs.createWriteStream("./dumps/"+fname);
+		info("Starting download...");
+		http.get(options_e, function(res) {
+			var len = res.headers["content-length"]
+			res.on('data', function(data) {
+				fileee.write(data);
+				var progress = (fileee.bytesWritten / len * 100).toFixed(2);
+				var mb = (fileee.bytesWritten / 1024 / 1024).toFixed(1);
+				var mbtotal = (len / 1024 / 1024).toFixed(1);
+				process.stdout.write("Downloading "+mb+"MB of "+mbtotal+"MB ("+progress+"%)\015");
+			}).on('end', function() {
+				info("Server successfully downloaded!");
+				terminalCommand("mkdir -p "+settings.cwd+" && mv -f ./dumps/"+fname+" "+settings.cwd+"/"+fname, function(err, stdout, stderr) {
+					if(err) {
+						info("An error occured trying to move server file from dumps.");
+						return;
+					}
+					info("Server is ready! Use '!server restart' to launch it!");
+				});
+			}).on('error', function(err) {
+				info("An error occured trying to download server file.");
+			});
+		});
+	});
 }
 
 // List of all commands
@@ -361,8 +413,40 @@ function processMessage(inp) {
     }
 }
 
+// Check if the server exists
+function checkServerExists() {
+	var fpath = path.resolve(serverdir+"/"+settings.jarname);
+	if (fs.existsSync(fpath)) {
+		info("Server file exist!");
+		rl.question("Download a new server file anyway? [yes/no] ", function(answer) {
+	        if (answer === 'yes') {
+	        	rl.question("What minecraft version would you like? ", function(answer) {
+	        		// TODO: check if valid version.
+	        		downloadGameserver(answer);
+	        	});
+	        }
+	    });
+    	return;
+	}
+	info("Server file doesn't exist!");
+	rl.question("Download server file? [yes/no] ", function(answer) {
+        if (answer === 'yes') {
+        	rl.question("What minecraft version would you like? ", function(answer) {
+        		// TODO: check if valid version.
+        		downloadGameserver(answer);
+        	});
+        }
+    });
+    return;
+}
+
 // Creates server process
 function spawnserver() {
+	var fpath = path.resolve(serverdir+"/"+settings.jarname);
+	if (!fs.existsSync(fpath)) {
+		checkServerExists();
+		return;
+	}
     restartCalled = false;
     stopExEula = false;
     server_process = exec.spawn(
@@ -445,11 +529,13 @@ rl.on('line', function (line) {
         if(spliti[1]) {
             if(spliti[1] === "restart") {
                 restartCalled = true;
-                info("Attempting a restart.");
+                info("Attempting to restart.");
                 if(server_process)
                     server_process.stdin.write('stop\r');
                 else
                     spawnserver();
+            } else if(spliti[1] === "download") {
+            	checkServerExists();
             }
         }
     } else {
@@ -514,5 +600,12 @@ String.prototype.format = function(){
   return util.format.apply(util, args);
 };
 
-spawnserver();
-initIrc();
+if(processargs.indexOf("--nostart") === -1 && processargs.indexOf("-n") === -1)
+	spawnserver();
+else
+	info("Server was not started. Run '!server restart' to start the server!");
+
+if(processargs.indexOf("--norelay") === -1 && processargs.indexOf("-r") === -1)
+	initIrc();
+else
+	info("Relay was not started!");

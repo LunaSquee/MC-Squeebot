@@ -1,0 +1,17 @@
+{
+    "botname": "Squeebot",
+
+    "ramStart": 524,
+    "ramMax": 1024,
+    "jarname": "minecraft_server.jar",
+    "cwd": "server",
+    "prefix":"!",
+
+    "ircRelay": {
+        "enabled": false,
+        "host": "localhost",
+        "port": 9977,
+        "password": "******",
+        "reconnectInterval": 30
+    }
+}
